@@ -1,9 +1,12 @@
-# SEE ALSO
-#   - https://sourceware.org/gdb/current/onlinedocs/gdb.pdf
-#
-# TODO
-#   - add test for signed gdb on macos
-#
+#****h* debug/nimgdb
+## PURPOSE
+##   GDB frontend with optional Nim symbol translation and filtering
+## SEE ALSO
+#*   - [docgen]( href:nimgdb.html )
+#* TODO
+#*   - add test for entitled gdb on macos
+#*   - add proc to entitle gdb on macos
+#******
 
 import std/[
   os, sequtils, strutils, tables, locks,
@@ -13,12 +16,20 @@ import pkg/cligen
 import pkg/platforms
 import pkg/procs
 
+#****if* nimgdb/info
 template info(msg: string) =
+  ## PURPOSE
+  ##   Write formatted info `msg` to `stderr`.
   stderr.writeLine "info: " & msg
+#******
 
+#****if* nimgdb/fatal
 template fatal(msg: string) =
+  ## PURPOSE
+  ##   Write formatted fatal `msg` to `stderr` and quit with error return code.
   stderr.writeLine "error: " & msg
   quit 1
+#******
 
 # template runtimeAssert*(expr; msg = "") =
 #   ## Runtime asserts.
@@ -98,12 +109,16 @@ type
   GdbOutput* = object
     oob*: seq[OOBRec]
     res*: Option[ResultRec]
+  #****t* nimgdb/GdbInstance
   GdbInstance* = ref object
+    ## PURPOSE
+    ##   Holds synchronization details for each GDB instance.
     thread*: Thread[(seq[string], ptr GdbInstance)]
     started*: Cond
     stdinLock*: Lock
     gdb*: Gdb
     stdinChan*: Channel[string]
+  #******
 
 proc `=copy`(a: var GdbObj, b: GdbObj) {.error.}
 
@@ -114,7 +129,10 @@ var
 proc newGdbMiParser*(): owned GdbMiParser {.raises: [ValueError, Exception].} =
   GdbMiParser(peg: parsePeg(gdbMiPeg, "gdbMi"))
 
+#****f* nimgdb/parse
 proc parse*[T](parser: GdbMiParser, resp: string): Option[T] =
+  ## PURPOSE
+  ##   Parse GDB's output
   var match: string
   var r: Option[T]
   let miParser = parser.peg.eventParser:
@@ -132,6 +150,7 @@ proc parse*[T](parser: GdbMiParser, resp: string): Option[T] =
             r = some match
   let parsedLen = miParser(resp)
   r
+#******
 
 func initGdbSync*(sync: var GdbInstance) =
   sync.started.initCond

@@ -1,8 +1,15 @@
 #!/bin/sh -ue
-# See Also
-#   man tmux
-#   man gdb
-#   man valgrind
+#****h* debug/tui_session
+#* PURPOSE
+#*   Coordinate GDB and LLDB with tmux.
+#*   Persist debug session to disk for later replay or review.
+#* SEE ALSO
+#*   - man tmux
+#*   - man gdb
+#*   - man valgrind
+#* TODO
+#*   - convert this to a Nim program
+#******
 
 number_of_debug_sessions_to_keep=1
 

@@ -71,11 +71,11 @@ format items:
     NOTES
 options:
     --src .
-    --doc doc
+    --doc htmldocs/index
 #    --css ./doc/robodoc.css
     --index
     --sections
-    --multidoc
+    --singledoc
     --html
     --internal
     --tabsize 2
@@ -104,7 +104,7 @@ header markers:
 remark markers:
     *
     ##
-    #
+    #*
 end markers:
     ****
     /****

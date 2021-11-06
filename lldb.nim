@@ -1,9 +1,9 @@
 #****h* debug/lldb
 ## SEE ALSO
 ##   - https://lldb.llvm.org/cpp_reference/classlldb_1_1SBCommandInterpreter.html
-##   - [LLDB Homepage](https://lldb.llvm.org/)
-##   - [LLDB-MI Repo](https://github.com/lldb-tools/lldb-mi)
-##   - [LLDB Tutorial](https://lldb.llvm.org/use/tutorial.html)
+##   - [LLDB Homepage]( https://lldb.llvm.org/ )
+##   - [LLDB-MI Repo]( https://github.com/lldb-tools/lldb-mi )
+##   - [LLDB Tutorial]( https://lldb.llvm.org/use/tutorial.html )
 #******
 
 import std/[macros, macrocache, options]
