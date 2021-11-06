@@ -25,12 +25,14 @@ mkdir -p ${dbg}
 (
 cd .debug
 rm -rf last
-if [ -e current ]
+if [ -h current ]
 then mv -f current last
-else ln -s current last
+else ln -sF current last
 fi
-ln -s ${current_session} current
-cp last/gdb.history current/gdb.history
+ln -sF ${current_session} current
+if [ -e last/gdb.history ]
+then cp -f last/gdb.history current/gdb.history
+fi
 IFS='
 '
 for session in $(ls | head -n $(($(ls | sort | wc -l) - $((${number_of_debug_sessions_to_keep}+3)))))

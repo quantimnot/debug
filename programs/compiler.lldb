@@ -1,0 +1,4 @@
+watchpoint set debuggeeTarget[0] -- debuggeeTarget
+watchpoint set debuggee[0] -- debuggee
+
+breakpoint set -r 'compileModule__.+' -c debugger_isCompilingDebuggeeTarget == true

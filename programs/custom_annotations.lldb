@@ -1,0 +1,14 @@
+# custom annotations
+
+
+# breakpoints of interest
+
+br -r semCustomPragma__.+ -c debuggerIsCompilingDebuggee() == true -C br enable onSemCustomPragma
+# TODO
+
+
+# watchpoints of interest
+
+
+
+# tracepoints of interest

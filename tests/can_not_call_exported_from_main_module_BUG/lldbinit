@@ -1,0 +1,11 @@
+log enable -f lldb.log lldb all
+b main
+plugin load debuggee
+r
+repr rr
+call getInt()
+expr $0 == 1
+call getCString()
+expr $2[0] == 'a'
+detach
+q

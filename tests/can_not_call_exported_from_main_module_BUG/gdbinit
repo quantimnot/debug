@@ -1,0 +1,24 @@
+#set logging overwrite on
+#set logging file gdb.log
+#set logging off
+set unwindonsignal on
+set startup-quietly on
+set verbose off
+set confirm off
+set complaints 0
+set interactive-mode off
+b main
+r
+source ../../gdb.py
+#source ../../formatters/nim-gdb.py
+b debuggee.nim:25
+c
+info locals
+#call getInt()
+#expr $1 == 1
+#call getCString()
+#expr $2[0] == 'a'
+#print $dollar(s)
+#detach
+#q
+#y

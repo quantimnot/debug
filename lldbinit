@@ -1,0 +1,3 @@
+#command script import --allow-reload .debug/formatters/lldbnim.py
+#plugin load .debug/liblldbnim.dylib
+#command script import --allow-reload .debug/lldbinit.py

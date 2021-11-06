@@ -1,0 +1,121 @@
+#****iB* Build/robodoc.rc
+# PURPOSE
+#   Defines robodoc's configuration for this project.
+#   Robodoc is a documentation compiler. It does the following in this project:
+#   - parse source files for specially formatted comments
+#   - run any external tools as directed in the comments
+#   - compile HTML documentation from the output of the previous steps
+#******
+items:
+    COPYRIGHT
+    LICENSE
+    NAME
+    USAGE
+    PURPOSE
+    TAGS
+    ENVIRONMENT VARIABLES
+    INPUTS
+    RETURN VALUES
+    ERRORS
+    SIDE EFFECTS
+    PRECONDITIONS
+    POSTCONDITIONS
+    INVARIANTS
+    SECURITY
+    ATTACK SURFACE
+    THREATS
+    PERFORMANCE
+    NOTES
+    TESTS
+    EXAMPLE
+    DERIVED FROM
+    SEE ALSO
+    HISTORY
+    BUGS
+    TODO
+    TODOS
+ignore items:
+item order:
+    COPYRIGHT
+    LICENSE
+    NAME
+    USAGE
+    PURPOSE
+    TAGS
+    ENVIRONMENT VARIABLES
+    INPUTS
+    RETURN VALUES
+    ERRORS
+    SIDE EFFECTS
+    PRECONDITIONS
+    POSTCONDITIONS
+    INVARIANTS
+    SECURITY
+    ATTACK SURFACE
+    THREATS
+    PERFORMANCE
+    NOTES
+    TESTS
+    EXAMPLE
+    DERIVED FROM
+    SEE ALSO
+    HISTORY
+    BUGS
+    TODO
+    TODOS
+source items:
+preformatted items:
+format items:
+    NOTES
+options:
+    --src .
+    --doc doc
+#    --css ./doc/robodoc.css
+    --index
+    --sections
+    --multidoc
+    --html
+    --internal
+    --tabsize 2
+    --nogeneratedwith
+    --sectionnameonly
+    --syntaxcolors
+    --use_source_comments PURPOSE
+headertypes:
+    B  "Build Modules"      robo_build_modules   3
+    J  "Projects"           robo_projects        2
+    F  "Files"              robo_files           1
+    e  "Makefile Entries"   robo_mk_entries
+    x  "System Tests"       robo_syst_tests
+    q  Queries              robo_queries
+ignore files:
+    dep
+    build
+    issues
+    todo
+    .git
+    .history
+accept files:
+header markers:
+    /****
+    #****
+remark markers:
+    *
+    ##
+    #
+end markers:
+    ****
+    /****
+    #****
+header separate characters:
+header ignore characters:
+remark begin markers:
+    /*
+    #[
+remark end markers:
+    */
+    ]#
+source line comments:
+    //
+    #
+keywords:
