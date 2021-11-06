@@ -5,6 +5,8 @@
 #   - parse source files for specially formatted comments
 #   - run any external tools as directed in the comments
 #   - compile HTML documentation from the output of the previous steps
+# SEE ALSO
+#   - [ROBOdoc Manual](https://rfsber.home.xs4all.nl/Robo/pages/robodoc-49942-user-manual.html#header_types)
 #******
 items:
     COPYRIGHT
