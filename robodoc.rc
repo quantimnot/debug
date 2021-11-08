@@ -11,9 +11,11 @@
 items:
     COPYRIGHT
     LICENSE
+    ATTRIBUTION
     NAME
     USAGE
     PURPOSE
+    DESCRIPTION
     TAGS
     ENVIRONMENT VARIABLES
     INPUTS
@@ -33,16 +35,22 @@ items:
     DERIVED FROM
     SEE ALSO
     HISTORY
+    ENUM VALUES
+    FIELDS
     BUGS
     TODO
     TODOS
+    IGNORE
 ignore items:
+    IGNORE
 item order:
+    NAME
+    PURPOSE
     COPYRIGHT
     LICENSE
-    NAME
+    ATTRIBUTION
     USAGE
-    PURPOSE
+    DESCRIPTION
     TAGS
     ENVIRONMENT VARIABLES
     INPUTS
@@ -65,7 +73,11 @@ item order:
     BUGS
     TODO
     TODOS
+    ENUM VALUES
+    FIELDS
 source items:
+    ENUM VALUES
+    FIELDS
 preformatted items:
 format items:
     NOTES
@@ -82,7 +94,6 @@ options:
     --nogeneratedwith
     --sectionnameonly
     --syntaxcolors
-    --use_source_comments PURPOSE
 headertypes:
     B  "Build Modules"      robo_build_modules   3
     J  "Projects"           robo_projects        2

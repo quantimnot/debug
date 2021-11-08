@@ -1,3 +1,4 @@
+res <- output
 output <- ( out_of_band_record )* result_record? "(gdb)" \n
 result_record <- token? "^" result_class ( ',' result )* \n
 out_of_band_record <- async_record / stream_record

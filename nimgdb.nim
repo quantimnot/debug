@@ -4,17 +4,33 @@
 ## SEE ALSO
 #*   - [docgen]( href:nimgdb.html )
 #* TODO
-#*   - add test for entitled gdb on macos
-#*   - add proc to entitle gdb on macos
+#*   - [X] connect `nimgdb`'s `stdin` to `gdb`'s `stdin`
+#*   - [ ] create a symbol translator with test (translator acts on streams)
+#*   - [ ] connect gdb stdout to translator
+#*   - [ ] connect translator to stdout
+#*   - [ ] add test for entitled gdb on macos
+#*   - [ ] add proc to entitle gdb on macos
 #******
 
 import std/[
   os, sequtils, strutils, tables, locks,
-  tempfiles, streams, pegs, options, tables]
+  tempfiles, streams, pegs, options]
 
+import pkg/prelude/[alias, compare_variant]
 import pkg/cligen
 import pkg/platforms
 import pkg/procs
+
+#****if* nimgdb/debug
+template debug(msg: string) =
+  ## PURPOSE
+  ##   Write formatted debug `msg` to `stderr`.
+  when defined debug:
+    let pos = instantiationInfo()
+    {.cast(noSideEffect).}:
+      stderr.writeLine format(
+        "./$1($2, $3) debug: $4", pos.filename, pos.line, pos.column, msg)
+#******
 
 #****if* nimgdb/info
 template info(msg: string) =
@@ -66,26 +82,166 @@ type
     stderr*: FileHandle
   Gdb* = ref GdbObj
   Token* = distinct string
-  OOBRecKind* = enum
-    Async, Stream
-  AsyncRecKind* = enum
-    Exec, Status, Notify
-  ResultClass* = enum
-    Done, Running, Connected, Error, Exit
-  StreamRecKind* = enum
-    Console, Target, Log
-  AsyncOutputKind* = enum
+  OOBRecKind* {.pure.} = enum
+    Async
+    Stream
+  #****t* nimgdb/StoppedReason
+  StoppedReason* {.pure.} = enum
+    ## PURPOSE
+    ##   Reason the target has stopped.
+    ## ATTRIBUTION
+    ##   Copyright (C) 1988-2021 Free Software Foundation, Inc.
+    ##   Comments are verbatim copies.
+    ##   Subject to GNU Free Documentation License, Version 1.3 or any later version
+    ##   Derived/copied from:
+    ##     https://sourceware.org/gdb/current/onlinedocs/gdb/GDB_002fMI-Async-Records.html#GDB_002fMI-Async-Records
+    #* SEE ALSO
+    #*   href:nimgdb.html#StoppedReason
+    #* ENUM VALUES
+    BreakpointHit = "breakpoint-hit"
+    ## A breakpoint was reached.
+    WatchpointTrigger = "watchpoint-trigger"
+    ## A watchpoint was triggered.
+    ReadWatchpointTrigger = "read-watchpoint-trigger"
+    ## A read watchpoint was triggered.
+    AccessWatchpointTrigger = "access-watchpoint-trigger"
+    ## An access watchpoint was triggered.
+    FunctionFinished = "function-finished"
+    ## An -exec-finish or similar CLI command was accomplished.
+    LocationReached = "location-reached"
+    ## An -exec-until or similar CLI command was accomplished.
+    WatchpointScope = "watchpoint-scope"
+    ## A watchpoint has gone out of scope.
+    EndSteppingRange = "end-stepping-range"
+    ## An -exec-next, -exec-next-instruction, -exec-step, -exec-step-
+    ## instruction or similar CLI command was accomplished.
+    ExitedSignalled = "exited-signalled"
+    ## The inferior exited because of a signal.
+    Exited = "exited"
+    ## The inferior exited.
+    ExitedNormally = "exited-normally"
+    ## The inferior exited normally.
+    SignalReceived = "signal-received"
+    ## A signal was received by the inferior.
+    SolibEvent = "solib-event"
+    ## The inferior has stopped due to a library being loaded or unloaded.
+    ## This can happen when stop-on-solib-events (see Files) is set or when
+    ## a catch load or catch unload catchpoint is in use (see Set Catchpoints).
+    Fork = "fork"
+    ## The inferior has forked. This is reported when catch fork
+    ## (see Set Catchpoints) has been used.
+    Vfork = "vfork"
+    ## The inferior has vforked. This is reported in when catch vfork
+    ## (see Set Catchpoints) has been used.
+    SyscallEntry = "syscall-entry"
+    ## The inferior entered a system call. This is reported when catch syscall
+    ## (see Set Catchpoints) has been used.
+    SyscallReturn = "syscall-return"
+    ## The inferior returned from a system call. This is reported when catch
+    ## syscall (see Set Catchpoints) has been used.
+    Exec = "exec"
+    ## The inferior called exec. This is reported when catch exec
+    ## (see Set Catchpoints) has been used.
+  #******
+  #****t* nimgdb/AsyncRecKind
+  AsyncRecKind* {.pure.} = enum
+    ## ATTRIBUTION
+    ##   Copyright (C) 1988-2021 Free Software Foundation, Inc.
+    ##   Comments are verbatim copies.
+    ##   Subject to GNU Free Documentation License, Version 1.3 or any later version
+    ##   Derived/copied from:
+    ##     https://sourceware.org/gdb/current/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records
+    #* SEE ALSO
+    #*   href:nimgdb.html#AsyncRecKind
+    #* ENUM VALUES
+    Exec
+    Status
+    Notify
+  #******
+  #****t* nimgdb/ResultKind
+  ResultKind* {.pure.} = enum
+    ## PURPOSE
+    ##   Reason the target has stopped.
+    ## ATTRIBUTION
+    ##   Copyright (C) 1988-2021 Free Software Foundation, Inc.
+    ##   Comments are verbatim copies.
+    ##   Subject to GNU Free Documentation License, Version 1.3 or any later version
+    ##   Derived/copied from:
+    ##     https://sourceware.org/gdb/current/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records
+    #* SEE ALSO
+    #*   href:nimgdb.html#ResultKind
+    #* ENUM VALUES
+    Done = "done"
+    ## The synchronous operation was successful, results are the return values.
+    Running = "running"
+    ## This result record is equivalent to ‘^done’. Historically, it was
+    ## output instead of ‘^done’ if the command has resumed the target.
+    ## This behaviour is maintained for backward compatibility, but all
+    ## frontends should treat ‘^done’ and ‘^running’ identically and rely
+    ## on the ‘*running’ output record to determine which threads are resumed.
+    Connected = "connected"
+    ## GDB has connected to a remote target.
+    Error = "error"
+    ## The operation failed.
+    ## The msg=c-string variable contains the corresponding error message.
+    ## If present, the code=c-string variable provides an error code on which
+    ## consumers can rely on to detect the corresponding error condition.
+    ## At present, only one error code is defined: ‘"undefined-command"’
+    ## Indicates that the command causing the error does not exist.
+    ## SEE ALSO
+    ##   `ErrorCode`
+    Exit = "exit"
+    ## GDB has terminated.
+  #******
+  #****t* nimgdb/ErrorCode
+  ErrorCode* {.pure.} = enum
+    ## PURPOSE
+    ##   Enum that represents the error kind.
+    ## ATTRIBUTION
+    ##   Copyright (C) 1988-2021 Free Software Foundation, Inc.
+    ##   Comments are verbatim copies.
+    ##   Subject to GNU Free Documentation License, Version 1.3 or any later version
+    ##   Derived/copied from:
+    ##     https://sourceware.org/gdb/current/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records
+    #* SEE ALSO
+    #*   href:nimgdb.html#ErrorCode
+    #* ENUM VALUES
+    Unknown = ""
+    ## The default error code whenever a code is not defined.
+    UndefinedCommand = "\"undefined-command\""
+    ## Indicates that the command causing the error does not exist.
+  #******
+  #****t* nimgdb/Error
+  Error* = object
+    ## PURPOSE
+    ##   Represents an error returned by GDB.
+    ## SEE ALSO
+    ##   https://sourceware.org/gdb/current/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records
+    #*   href:nimgdb.html#Error
+    #* FIELDS
+    msg*: string
+    ## The error message.
+    code*: ErrorCode
+    ## The error code. Defaults to `Unknown`. See `ErrorCode`_.
+  #******
+  StreamRecKind* {.pure.} = enum
+    Console
+    Target
+    Log
+  AsyncOutputKind* {.pure.} = enum
     Stopped
-  ValueKind* = enum
-    Const, List, Tuple
+  ValueKind* {.pure.} = enum
+    Const
+    List
+    Tuple
   Value* = object
     case kind*: ValueKind
     of Const:
-      strVal*: string
+      `const`*: string
     of List:
-      listVal*: seq[Value]
+      list*: seq[Value]
     of Tuple:
-      tupleVal*: Table[string, Value]
+      `tuple`*: Table[string, Value]
   Result* = object
     key*: string
     val*: Value
@@ -103,17 +259,20 @@ type
     case kind*: OOBRecKind
     of Async:
       asyncVal*: AsyncRec
-    of Stream:
+    of OOBRecKind.Stream:
       strmVal*: StreamRec
   ResultRec* = object
-  GdbOutput* = object
+    token*: Option[Token]
+    kind*: ResultKind
+    results*: seq[Result]
+  Output* = object
     oob*: seq[OOBRec]
     res*: Option[ResultRec]
   #****t* nimgdb/GdbInstance
   GdbInstance* = ref object
     ## PURPOSE
     ##   Holds synchronization details for each GDB instance.
-    thread*: Thread[(seq[string], ptr GdbInstance)]
+    thread*: Thread[(seq[string], ptr GdbInstance, Handler, Handler)]
     started*: Cond
     stdinLock*: Lock
     gdb*: Gdb
@@ -122,35 +281,96 @@ type
 
 proc `=copy`(a: var GdbObj, b: GdbObj) {.error.}
 
+proc `==`*(a,b: Value): bool = compareVariant(a,b)
+
 var
   gdbInstances*: seq[GdbInstance]
   stop = false
 
+#****f* nimgdb/newGdbMiParser
 proc newGdbMiParser*(): owned GdbMiParser {.raises: [ValueError, Exception].} =
+  ## PURPOSE
+  ##   Construct a new GDB MI parser.
   GdbMiParser(peg: parsePeg(gdbMiPeg, "gdbMi"))
+#******
 
 #****f* nimgdb/parse
-proc parse*[T](parser: GdbMiParser, resp: string): Option[T] =
+proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
   ## PURPOSE
   ##   Parse GDB's output
-  var match: string
-  var r: Option[T]
+  var
+    match: string
+    value: Value
+    resultPair: Result
+    results: seq[Result]
+    token: Token
+    resRec: ResultRec
+    o: Output
+    r: Option[Output]
   let miParser = parser.peg.eventParser:
     pkNonTerminal:
       leave:
         if length > 0:
           match = s.substr(start, start+length-1)
-          # echo p.nt.name
+          # debug p.nt.name
           case p.nt.name
-    #       # of "console_stream_output":
-    #       #   echo match
-    #       # of "result_record":
-    #       #   echo match
+          of "token":
+            token = match.Token
+          of "const":
+            value.`const` = match
+          # of "list":
+          #   value.`list` = match
+          of "variable":
+            resultPair.key = match
+          of "value":
+            resultPair.val = value
+          of "result":
+            results.add resultPair
+          of "result_class":
+            case match
+            of $ResultKind.Done:
+              resRec.kind = ResultKind.Done
+            of $ResultKind.Running:
+              resRec.kind = ResultKind.Running
+            of $ResultKind.Connected:
+              resRec.kind = ResultKind.Connected
+            of $ResultKind.Error:
+              resRec.kind = ResultKind.Error
+            of $ResultKind.Exit:
+              resRec.kind = ResultKind.Exit
+            else:
+              fatal "unhandled result kind"
+          of "result_record":
+            resRec.results = results
+            o.res = some resRec
           of "output":
-            r = some match
+            r = some o
   let parsedLen = miParser(resp)
+  # debug $r
   r
 #******
+
+func getError*(resRec: ResultRec): Option[Error] =
+  if resRec.kind == ResultKind.Error:
+    result = some Error()
+    if resRec.results.len > 0:
+      if resRec.results[0].key == "msg":
+        doAssert resRec.results[0].val.kind == ValueKind.Const
+        result.get.msg = resRec.results[0].val.`const`
+      if resRec.results.len > 1 and resRec.results[1].key == "code":
+        case resRec.results[1].val.`const`
+        of $ErrorCode.UndefinedCommand:
+          result.get.code = ErrorCode.UndefinedCommand
+        else:
+          debug "failed to handle error code: " & resRec.results[1].val.`const`
+
+func getError*(output: Output): Option[Error] =
+  if output.res.isSome:
+    return output.res.get.getError
+
+func getError*(output: Option[Output]): Option[Error] =
+  if output.isSome:
+    return output.get.getError
 
 func initGdbSync*(sync: var GdbInstance) =
   sync.started.initCond
@@ -174,64 +394,144 @@ proc start*(gdb: var Gdb) =
   gdb.stdin = gdb.`proc`.inputStream
   gdb.stdout = gdb.`proc`.outputHandle
   gdb.stderr = gdb.`proc`.errorHandle
-  gdb.stdin.write "-gdb-set mi-async on\n"
-  gdb.stdin.flush
 
 proc start*(gdb: var Gdb, sync: var GdbInstance) {.gcsafe.} =
   gdb.start
   sync.started.signal
   sync.gdb = gdb
-  echo $cast[int](sync)
 
-proc eventLoop*(gdb: Gdb, sync: GdbInstance) {.gcsafe.} =
-  echo $gdb.`proc`.monitor
+proc eventLoop*(gdb: Gdb, sync: GdbInstance,
+    stdoutHandler, stderrHandler: Handler = nil)
+    {.effectsOf: [stdoutHandler, stderrHandler].} =
+  echo $gdb.`proc`.monitor(stdoutHandler, stderrHandler)
 
-proc gdbThread*(args: (seq[string], ptr GdbInstance)) {.gcsafe.} =
+proc gdbThread*(args: (seq[string], ptr GdbInstance, Handler, Handler)) {.gcsafe.} =
   var gdb = initGdb(args[0], args[1][])
   gdb.start args[1][]
-  gdb.eventLoop args[1][]
+  {.cast(gcsafe).}:
+    gdb.eventLoop args[1][], args[2], args[3]
 
+#****f* nimgdb/write
+proc write*(gdb: Gdb, cmd: string) =
+  ## PURPOSE
+  ##   Writes `cmd` to GDB input.
+  echo "<- " & cmd
+  gdb.stdin.write cmd
+  gdb.stdin.flush
+#******
+
+#****f* nimgdb/run
 proc run*(gdb: Gdb, all, start = false, threadGroup = none(int)): bool =
+  ## PURPOSE
+  ##   Run the inferior.
   var cmd = "-exec-run"
   if all: cmd &= " --all"
   elif threadGroup.isSome:
     cmd &= " --thread-group " & $threadGroup.get
   if start: cmd &= " --start"
-  gdb.stdin.writeLine cmd
-  gdb.stdin.flush
+  cmd &= '\n'
+  gdb.write cmd
+#******
 
+#****f* nimgdb/exit
 proc exit*(gdb: Gdb) =
-  let cmd = "-gdb-exit"
-  gdb.stdin.writeLine cmd
-  gdb.stdin.flush
+  ## PURPOSE
+  ##   Close the GDB session.
+  gdb.write "-gdb-exit\n"
+#******
 
-proc nimgdb(args: seq[string]) =
-  # gdbCb args, cb
+#****f* nimgdb/preRunOrAttachCmds
+func preRunOrAttachCmds*: string =
+  ## PURPOSE
+  ##   Return commands to setup the debugger *before* it runs or attaches to a
+  ##   target.
+  ## SEE ALSO
+  ##   Debugging with GDB: 27.3.2 Asynchronous command execution and non-stop mode
+  # https://sourceware.org/gdb/current/onlinedocs/gdb/Asynchronous-and-non_002dstop-modes.html#Asynchronous-and-non_002dstop-modes
+  result &= "-gdb-set mi-async on\n"
+  # https://sourceware.org/gdb/current/onlinedocs/gdb/Non_002dStop-Mode.html#Non_002dStop-Mode
+  result &= "-gdb-set non-stop on\n"
+#******
+
+#****f* nimgdb/newDefaultGdbOptions
+func newDefaultGdbOptions*: string =
+  ## PURPOSE
+  ##   Return default options for a GDB session.
+  ##   Can be set after running or attaching to a target.
+  discard
+#******
+
+#****f* nimgdb/nimgdb
+proc nimgdb*(args: seq[string],
+    preRunOrAttachCmds = preRunOrAttachCmds(),
+    dbgOpts = newDefaultGdbOptions()) =
+  ## PURPOSE
+  ##   Instantiates a debugger session.
+  ##   Passes `args` verbatim to the debugger programm.
+  ##   Checks and sets default debugger options.
+  ## SEE ALSO
+  ##   `newDefaultGdbOptions`
   var i = GdbInstance()
   i.initGdbSync
   gdbInstances.add i
-  createThread(gdbInstances[0].thread, gdbThread, (args, gdbInstances[0].addr))
-  gdbInstances[0].started.wait gdbInstances[0].stdinLock
-  discard gdbInstances[0].gdb.run
-  gdbInstances[0].thread.joinThread()
+  alias gdbSync, gdbInstances[0]
+  proc p(o: string) {.nimcall.} = stdout.write o
+  createThread(gdbSync.thread, gdbThread, (args, gdbSync.addr, p, p))
+  gdbSync.started.wait gdbSync.stdinLock
+  # TODO: assert that target is attached or ran
+  gdbSync.gdb.write preRunOrAttachCmds
+  gdbSync.gdb.write dbgOpts
+  # discard gdbSync.gdb.run
+  while not stdin.endOfFile:
+    gdbSync.gdb.write stdin.readLine & '\n'
+  gdbSync.thread.joinThread()
+#******
 
+#****if* nimgdb/ctrlc
 proc ctrlc() {.noconv.} =
+  ## PURPOSE
+  ##   Cntrl-C signal handler
+  ##   Closes each GDB instance.
+  ## SEE ALSO
+  ##   `setControlCHook`
   stop = true
   for i in gdbInstances:
     i.gdb.exit
+#******
 setControlCHook(ctrlc)
 
 when isMainModule:
   when defined test:
-    import std/unittest
-    suite "parse MI":
+    import std/[tempfiles, unittest]
+    # import fusion/scripting
+    template checkParsed(i) = check parse(parser, i).isSome
+    suite "MI parser":
       setup:
         let parser = newGdbMiParser()
       test "errors":
+        var err = parse(parser, "^error,msg=\"Undefined MI command: rubbish\",code=\"undefined-command\"\n(gdb)\n").getError
         check:
-          parse[string](parser,
-            "^error\n(gdb)\n").isSome
-          parse[string](parser,
-            "^error,msg=\"Undefined MI command: rubbish\"\n(gdb)\n").isSome
+          err.isSome
+          err.get.code == ErrorCode.UndefinedCommand
+          err.get.msg == "\"Undefined MI command: rubbish\""
+        err = parse(parser, "^error,msg=\"Undefined MI command: rubbish\"\n(gdb)\n").getError
+        check:
+          err.isSome
+          err.get.code == ErrorCode.Unknown
+          err.get.msg == "\"Undefined MI command: rubbish\""
+        err = parse(parser, "^error,msg=\"Undefined MI command: rubbish\"\n(gdb)\n").getError
+        check:
+          err.isSome
+          err.get.code == ErrorCode.Unknown
+        err = parse(parser, "^done\n(gdb)\n").getError
+        check err.isNone
+    # suite "e2e":
+    #   setup:
+    #     let tmp = createTempDir("debug_gdb", "test_e2e")
+    #   teardown:
+    #     removeDir tmp
+    #   test "load inferior":
+    #     check:
+    #       false
   else:
     dispatch nimgdb
