@@ -208,7 +208,7 @@ type
     #* ENUM VALUES
     Unknown = ""
     ## The default error code whenever a code is not defined.
-    UndefinedCommand = "\"undefined-command\""
+    UndefinedCommand = "undefined-command"
     ## Indicates that the command causing the error does not exist.
   #******
   #****t* nimgdb/Error
@@ -317,7 +317,7 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
           of "token":
             token = match.Token
           of "const":
-            value.`const` = match
+            value.`const` = match.strip(chars = {'"'})
           # of "list":
           #   value.`list` = match
           of "variable":
@@ -508,17 +508,31 @@ when isMainModule:
     suite "MI parser":
       setup:
         let parser = newGdbMiParser()
-      test "errors":
+      test "command success responses":
+        var success = parse(parser, "^done,key=\"val\"\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.kind == ResultKind.Done
+          success.get.res.get.results.len == 1
+          success.get.res.get.results[0].key == "key"
+          success.get.res.get.results[0].val.`const` == "val"
+        success = parse(parser, "^done\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.kind == ResultKind.Done
+      test "command error responses":
         var err = parse(parser, "^error,msg=\"Undefined MI command: rubbish\",code=\"undefined-command\"\n(gdb)\n").getError
         check:
           err.isSome
           err.get.code == ErrorCode.UndefinedCommand
-          err.get.msg == "\"Undefined MI command: rubbish\""
+          err.get.msg == "Undefined MI command: rubbish"
         err = parse(parser, "^error,msg=\"Undefined MI command: rubbish\"\n(gdb)\n").getError
         check:
           err.isSome
           err.get.code == ErrorCode.Unknown
-          err.get.msg == "\"Undefined MI command: rubbish\""
+          err.get.msg == "Undefined MI command: rubbish"
         err = parse(parser, "^error,msg=\"Undefined MI command: rubbish\"\n(gdb)\n").getError
         check:
           err.isSome
