@@ -234,14 +234,15 @@ type
     Const
     List
     Tuple
+  Tuple* = Table[string, Value]
   Value* = object
     case kind*: ValueKind
     of Const:
       `const`*: string
     of List:
       list*: seq[Value]
-    of Tuple:
-      `tuple`*: Table[string, Value]
+    of ValueKind.Tuple:
+      `tuple`*: Tuple
   Result* = object
     key*: string
     val*: Value
@@ -300,6 +301,8 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
   ##   Parse GDB's output
   var
     match: string
+    insideTuple: int
+    tupleVal: Tuple
     value: Value
     resultPair: Result
     results: seq[Result]
@@ -309,17 +312,28 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
     r: Option[Output]
   let miParser = parser.peg.eventParser:
     pkNonTerminal:
+      enter:
+        if p.nt.name == "tuple":
+          insideTuple.inc
+          debug "insideTuple start " & $insideTuple
       leave:
         if length > 0:
           match = s.substr(start, start+length-1)
-          # debug p.nt.name
+          debug p.nt.name
           case p.nt.name
           of "token":
             token = match.Token
           of "const":
             value.`const` = match.strip(chars = {'"'})
-          # of "list":
-          #   value.`list` = match
+          of "tuple":
+            debug "insideTuple finish " & $insideTuple
+            insideTuple.dec
+            if insideTuple == 0:
+              value.kind = ValueKind.Tuple
+              value.`tuple` = tupleVal
+          of "list":
+            debug "list"
+            # value.`list` = listVal
           of "variable":
             resultPair.key = match
           of "value":
@@ -331,7 +345,9 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
             of $ResultKind.Done:
               resRec.kind = ResultKind.Done
             of $ResultKind.Running:
-              resRec.kind = ResultKind.Running
+              # For the reason this sets `Done` instead of `Running`,
+              # see https://sourceware.org/gdb/current/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records
+              resRec.kind = ResultKind.Done
             of $ResultKind.Connected:
               resRec.kind = ResultKind.Connected
             of $ResultKind.Error:
@@ -345,6 +361,10 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
             o.res = some resRec
           of "output":
             r = some o
+        else:
+          if p.nt.name == "tuple":
+            insideTuple.dec
+
   let parsedLen = miParser(resp)
   # debug $r
   r
@@ -461,6 +481,18 @@ func newDefaultGdbOptions*: string =
   discard
 #******
 
+#****if* nimgdb/ctrlc
+proc ctrlc() {.noconv.} =
+  ## PURPOSE
+  ##   Cntrl-C signal handler
+  ##   Closes each GDB instance.
+  ## SEE ALSO
+  ##   `setControlCHook`
+  stop = true
+  for i in gdbInstances:
+    i.gdb.exit
+#******
+
 #****f* nimgdb/nimgdb
 proc nimgdb*(args: seq[string],
     preRunOrAttachCmds = preRunOrAttachCmds(),
@@ -476,9 +508,10 @@ proc nimgdb*(args: seq[string],
   gdbInstances.add i
   alias gdbSync, gdbInstances[0]
   proc p(o: string) {.nimcall.} = stdout.write o
+  setControlCHook(ctrlc)
   createThread(gdbSync.thread, gdbThread, (args, gdbSync.addr, p, p))
   gdbSync.started.wait gdbSync.stdinLock
-  # TODO: assert that target is attached or ran
+  # TODO: assert that target is not attached or running
   gdbSync.gdb.write preRunOrAttachCmds
   gdbSync.gdb.write dbgOpts
   # discard gdbSync.gdb.run
@@ -486,19 +519,6 @@ proc nimgdb*(args: seq[string],
     gdbSync.gdb.write stdin.readLine & '\n'
   gdbSync.thread.joinThread()
 #******
-
-#****if* nimgdb/ctrlc
-proc ctrlc() {.noconv.} =
-  ## PURPOSE
-  ##   Cntrl-C signal handler
-  ##   Closes each GDB instance.
-  ## SEE ALSO
-  ##   `setControlCHook`
-  stop = true
-  for i in gdbInstances:
-    i.gdb.exit
-#******
-setControlCHook(ctrlc)
 
 when isMainModule:
   when defined test:
@@ -521,7 +541,24 @@ when isMainModule:
         check:
           success.isSome
           success.get.res.isSome
+          # For the reason this checks for `Done` instead of `Running`,
+          # see https://sourceware.org/gdb/current/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records
           success.get.res.get.kind == ResultKind.Done
+        success = parse(parser, "^running\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.kind == ResultKind.Done
+        success = parse(parser, "^connected\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.kind == ResultKind.Connected
+        success = parse(parser, "^exit\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.kind == ResultKind.Exit
       test "command error responses":
         var err = parse(parser, "^error,msg=\"Undefined MI command: rubbish\",code=\"undefined-command\"\n(gdb)\n").getError
         check:
@@ -539,6 +576,15 @@ when isMainModule:
           err.get.code == ErrorCode.Unknown
         err = parse(parser, "^done\n(gdb)\n").getError
         check err.isNone
+      test "tuple values":
+        var success = parse(parser, "^done,key={}\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.results.len == 1
+          success.get.res.get.results[0].key == "key"
+          success.get.res.get.results[0].val.kind == ValueKind.Tuple
+          # success.get.res.get.results[0].val.`const` == "val"
     # suite "e2e":
     #   setup:
     #     let tmp = createTempDir("debug_gdb", "test_e2e")
