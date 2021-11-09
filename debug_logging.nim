@@ -65,7 +65,7 @@ proc initLogging*() =
 template debug*(msg: string, tags: HashSet[string] = ["*"].toHashSet) =
   ## PURPOSE
   ##   Write formatted debug `msg` to `stderr`.
-  when tags.hasDebugTag:
+  when tags.inDebugTag:
     {.cast(noSideEffect).}:
       # stderr.writeLine format("$1 debug: $2", lineInfo(instantiationInfo()), msg)
       logging.debug msg

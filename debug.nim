@@ -26,9 +26,9 @@ const debugTags* = (
 )()
 #******
 
-#****f* debug/hasDebugTag
+#****f* debug/inDebugTag
 ## PURPOSE
 ##   Tests whether any tag in a set is contained in the set of debug tags.
-proc hasDebugTag*(tags: HashSet[string]): bool =
+proc inDebugTag*(tags: HashSet[string]): bool =
   not disjoint(tags, debugTags)
 #******
