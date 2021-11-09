@@ -303,11 +303,6 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
         of "result":
           debug "result start"
       leave:
-        # a={
-        #   b={
-        #     c="d"
-        #   }
-        # }
         if length > 0:
           match = s.substr(start, start+length-1)
           debug "= " & p.nt.name
