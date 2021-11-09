@@ -21,8 +21,11 @@ import pkg/cligen
 import pkg/platforms
 import pkg/procs
 
-import "."/debug_logging
+from "."/debug_logging import initLogging, fatal
 import debug as dbg
+
+template debug(msg) =
+  debug_logging.debug(msg, tags = @["nimgdb"])
 
 # template runtimeAssert*(expr; msg = "") =
 #   ## Runtime asserts.
@@ -276,6 +279,8 @@ proc newGdbMiParser*(): owned GdbMiParser {.raises: [ValueError, Exception].} =
 proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
   ## PURPOSE
   ##   Parse GDB's output
+  template debug(msg) =
+    debug_logging.debug(msg, tags = @["nimgdb_parse"])
   var
     match: string
     tupleDepth: int
@@ -296,14 +301,13 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
   let miParser = parser.peg.eventParser:
     pkNonTerminal:
       enter:
-        when defined debug:
-          debug "? " & p.nt.name
-          case p.nt.name
-          of "tuple":
-            tupleDepth.inc
-            debug "tupleDepth start " & $tupleDepth
-          of "result":
-            debug "result start"
+        debug "? " & p.nt.name
+        case p.nt.name
+        of "tuple":
+          tupleDepth.inc
+          debug "tupleDepth start " & $tupleDepth
+        of "result":
+          debug "result start"
       leave:
         # a={
         #   b={
@@ -372,10 +376,9 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
           of "output":
             r = some o
         else:
-          when defined debug:
-            debug "! " & p.nt.name
-            if p.nt.name == "tuple":
-              tupleDepth.dec
+          debug "! " & p.nt.name
+          if p.nt.name == "tuple":
+            tupleDepth.dec
 
   let parsedLen = miParser(resp) # TODO: do something with this result
   debug $r
