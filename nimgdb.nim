@@ -592,24 +592,24 @@ when isMainModule:
         err = parse(parser, "^done\n(gdb)\n").getError
         check err.isNone
       test "tuple values":
-        # var success = parse(parser, "^done,key={}\n(gdb)\n")
-        # check:
-        #   success.isSome
-        #   success.get.res.isSome
-        #   success.get.res.get.results.len == 1
-        #   success.get.res.get.results[0].key == "key"
-        #   success.get.res.get.results[0].val.kind == ValueKind.Tuple
-        #   success.get.res.get.results[0].val.`tuple`.len == 0
-        # success = parse(parser, "^done,key={key=\"val\"}\n(gdb)\n")
-        # check:
-        #   success.isSome
-        #   success.get.res.isSome
-        #   success.get.res.get.results.len == 1
-        #   success.get.res.get.results[0].key == "key"
-        #   success.get.res.get.results[0].val.kind == ValueKind.Tuple
-        #   success.get.res.get.results[0].val.`tuple`.len == 1
-        #   success.get.res.get.results[0].val.`tuple`["key"].`const` == "val"
-        var success = parse(parser, "^done,a={b={c=\"d\"}}\n(gdb)\n")
+        var success = parse(parser, "^done,key={}\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.results.len == 1
+          success.get.res.get.results[0].key == "key"
+          success.get.res.get.results[0].val.kind == ValueKind.Tuple
+          success.get.res.get.results[0].val.`tuple`.len == 0
+        success = parse(parser, "^done,key={key=\"val\"}\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.results.len == 1
+          success.get.res.get.results[0].key == "key"
+          success.get.res.get.results[0].val.kind == ValueKind.Tuple
+          success.get.res.get.results[0].val.`tuple`.len == 1
+          success.get.res.get.results[0].val.`tuple`["key"].`const` == "val"
+        success = parse(parser, "^done,a={b={c=\"d\"}}\n(gdb)\n")
         check:
           success.isSome
           success.get.res.isSome
@@ -619,6 +619,17 @@ when isMainModule:
           success.get.res.get.results[0].val.`tuple`.len == 1
           success.get.res.get.results[0].val.`tuple`["b"].`tuple`.len == 1
           success.get.res.get.results[0].val.`tuple`["b"].`tuple`["c"].`const` == "d"
+        success = parse(parser, "^done,a={b={c=\"d\"},e=\"f\"}\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.results.len == 1
+          success.get.res.get.results[0].key == "a"
+          success.get.res.get.results[0].val.kind == ValueKind.Tuple
+          success.get.res.get.results[0].val.`tuple`.len == 2
+          success.get.res.get.results[0].val.`tuple`["b"].`tuple`.len == 1
+          success.get.res.get.results[0].val.`tuple`["b"].`tuple`["c"].`const` == "d"
+          success.get.res.get.results[0].val.`tuple`["e"].`const` == "f"
     # suite "e2e":
     #   setup:
     #     let tmp = createTempDir("debug_gdb", "test_e2e")
