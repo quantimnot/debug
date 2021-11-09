@@ -4,6 +4,8 @@
 #******
 import std/[macros, sets, logging, strutils, os]
 
+import "."/debug as dbg
+
 export
   logging.log, logging.info, logging.notice, logging.warn, logging.error
 
@@ -60,10 +62,10 @@ proc initLogging*() =
 # #******
 
 #****f* logging/debug
-template debug*(msg: string) =
+template debug*(msg: string, tags: HashSet[string] = ["*"].toHashSet) =
   ## PURPOSE
   ##   Write formatted debug `msg` to `stderr`.
-  when defined debug:
+  when tags.hasDebugTag:
     {.cast(noSideEffect).}:
       # stderr.writeLine format("$1 debug: $2", lineInfo(instantiationInfo()), msg)
       logging.debug msg
