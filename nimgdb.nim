@@ -14,22 +14,57 @@
 
 import std/[
   os, sequtils, strutils, tables, locks,
-  tempfiles, streams, pegs, options]
+  tempfiles, streams, pegs, options, macros]
 
 import pkg/prelude/[alias, compare_variant]
 import pkg/cligen
 import pkg/platforms
 import pkg/procs
 
+#****if* nimgdb/lineInfo
+proc lineInfo(info: tuple[filename: string, line: int, column: int]): string =
+  ## PURPOSE
+  ##   Return formatted lineinfo as a string.
+  ## DESCRIPTION
+  ##   Used for logging.
+  ##   Formatted with a leading relative directory so link is clickable in VSCode.
+  format($CurDir/"$1($2, $3)", info.filename, info.line, info.column)
+#******
+
+#****if* nimgdb/traceMsg
+template traceMsg(msg: string) =
+  ## PURPOSE
+  ##   Write formatted trace `msg` to `stderr`.
+  when defined trace:
+    {.cast(noSideEffect).}:
+      stderr.writeLine format("$1 $2", lineInfo(instantiationInfo()), msg)
+#******
+
+#****if* nimgdb/trace(sym, msg)
+macro trace(sym: typed, msg: untyped = nil) =
+  ## PURPOSE
+  ##   Write formatted trace `msg` to `stderr`.
+  echo repr sym.getTypeImpl
+  when defined trace:
+    let id: string = repr sym
+    {.cast(noSideEffect).}:
+      if msg == nil:
+        quote do:
+          stderr.writeLine format("$1 trace($2) = $3",
+            lineInfo(instantiationInfo()), `id`, `sym`)
+      else:
+        quote do:
+          stderr.writeLine format("$1 trace($2) = $3 \"$4\"",
+            lineInfo(instantiationInfo()), `id`, `sym`, `msg`)
+#******
+
 #****if* nimgdb/debug
 template debug(msg: string) =
   ## PURPOSE
   ##   Write formatted debug `msg` to `stderr`.
   when defined debug:
-    let pos = instantiationInfo()
     {.cast(noSideEffect).}:
-      stderr.writeLine format(
-        "./$1($2, $3) debug: $4", pos.filename, pos.line, pos.column, msg)
+      stderr.writeLine format("$1 debug: $2", lineInfo(instantiationInfo()), msg)
 #******
 
 #****if* nimgdb/info
@@ -301,7 +336,7 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
   ##   Parse GDB's output
   var
     match: string
-    insideTuple: int
+    tupleDepth: int
     tupleVal: Tuple
     value: Value
     resultPair: Result
@@ -314,21 +349,23 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
     pkNonTerminal:
       enter:
         if p.nt.name == "tuple":
-          insideTuple.inc
-          debug "insideTuple start " & $insideTuple
+          tupleDepth.inc
+          debug "tupleDepth start " & $tupleDepth
       leave:
         if length > 0:
           match = s.substr(start, start+length-1)
-          debug p.nt.name
+          trace p.nt.name
           case p.nt.name
           of "token":
             token = match.Token
           of "const":
             value.`const` = match.strip(chars = {'"'})
           of "tuple":
-            debug "insideTuple finish " & $insideTuple
-            insideTuple.dec
-            if insideTuple == 0:
+            debug "tupleDepth finish " & $tupleDepth
+            debug $results.len
+            debug $results
+            tupleDepth.dec
+            if tupleDepth == 0:
               value.kind = ValueKind.Tuple
               value.`tuple` = tupleVal
           of "list":
@@ -339,7 +376,10 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
           of "value":
             resultPair.val = value
           of "result":
-            results.add resultPair
+            if tupleDepth > 0:
+              tupleVal[resultPair.key] = resultPair.val
+            else:
+              results.add resultPair
           of "result_class":
             case match
             of $ResultKind.Done:
@@ -359,14 +399,15 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
           of "result_record":
             resRec.results = results
             o.res = some resRec
+            resRec = ResultRec()
           of "output":
             r = some o
         else:
           if p.nt.name == "tuple":
-            insideTuple.dec
+            tupleDepth.dec
 
-  let parsedLen = miParser(resp)
-  # debug $r
+  let parsedLen = miParser(resp) # TODO: do something with this result
+  debug $r
   r
 #******
 
@@ -502,6 +543,7 @@ proc nimgdb*(args: seq[string],
   ##   Passes `args` verbatim to the debugger programm.
   ##   Checks and sets default debugger options.
   ## SEE ALSO
+  ##   `preRunOrAttachCmds`
   ##   `newDefaultGdbOptions`
   var i = GdbInstance()
   i.initGdbSync
@@ -584,7 +626,15 @@ when isMainModule:
           success.get.res.get.results.len == 1
           success.get.res.get.results[0].key == "key"
           success.get.res.get.results[0].val.kind == ValueKind.Tuple
-          # success.get.res.get.results[0].val.`const` == "val"
+          success.get.res.get.results[0].val.`tuple`.len == 0
+        success = parse(parser, "^done,key={key=\"val\"}\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.results.len == 1
+          success.get.res.get.results[0].key == "key"
+          success.get.res.get.results[0].val.kind == ValueKind.Tuple
+          # success.get.res.get.results[0].val.`tuple`.len == 0
     # suite "e2e":
     #   setup:
     #     let tmp = createTempDir("debug_gdb", "test_e2e")
