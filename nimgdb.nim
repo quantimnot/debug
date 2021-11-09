@@ -297,7 +297,7 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
     pkNonTerminal:
       enter:
         when defined debug:
-          debug "maybe " & p.nt.name
+          debug "? " & p.nt.name
           case p.nt.name
           of "tuple":
             tupleDepth.inc
@@ -305,9 +305,14 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
           of "result":
             debug "result start"
       leave:
+        # a={
+        #   b={
+        #     c="d"
+        #   }
+        # }
         if length > 0:
           match = s.substr(start, start+length-1)
-          debug p.nt.name
+          debug "= " & p.nt.name
           case p.nt.name
           of "token":
             token = match.Token
@@ -327,20 +332,22 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
             debug "list"
             # value.`list` = listVal
           of "variable":
-            resultPair().key = match
+            resultPairs.add Result(key: match)
+            debug $resultPairs
           of "value":
-            debug $tupleDepth
-            resultPair().val = value
+            resultPairs[^1].val = value
+            debug $resultPairs
             value.reset
             debug "value reset"
           of "result":
             debug $tupleDepth
+            let v = resultPairs.pop
             if tupleDepth > 0:
-              tupleVal[resultPair().key] = resultPair().val
+              tupleVal[v.key] = v.val
             else:
-              results.add resultPair()
+              results.add v
             # resultPair.reset
-            debug "resultPair reset"
+            # debug "resultPair reset"
           of "result_class":
             case match
             of $ResultKind.Done:
@@ -366,7 +373,7 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
             r = some o
         else:
           when defined debug:
-            debug "not " & p.nt.name
+            debug "! " & p.nt.name
             if p.nt.name == "tuple":
               tupleDepth.dec
 
@@ -585,22 +592,33 @@ when isMainModule:
         err = parse(parser, "^done\n(gdb)\n").getError
         check err.isNone
       test "tuple values":
-        var success = parse(parser, "^done,key={}\n(gdb)\n")
+        # var success = parse(parser, "^done,key={}\n(gdb)\n")
+        # check:
+        #   success.isSome
+        #   success.get.res.isSome
+        #   success.get.res.get.results.len == 1
+        #   success.get.res.get.results[0].key == "key"
+        #   success.get.res.get.results[0].val.kind == ValueKind.Tuple
+        #   success.get.res.get.results[0].val.`tuple`.len == 0
+        # success = parse(parser, "^done,key={key=\"val\"}\n(gdb)\n")
+        # check:
+        #   success.isSome
+        #   success.get.res.isSome
+        #   success.get.res.get.results.len == 1
+        #   success.get.res.get.results[0].key == "key"
+        #   success.get.res.get.results[0].val.kind == ValueKind.Tuple
+        #   success.get.res.get.results[0].val.`tuple`.len == 1
+        #   success.get.res.get.results[0].val.`tuple`["key"].`const` == "val"
+        var success = parse(parser, "^done,a={b={c=\"d\"}}\n(gdb)\n")
         check:
           success.isSome
           success.get.res.isSome
           success.get.res.get.results.len == 1
-          success.get.res.get.results[0].key == "key"
+          success.get.res.get.results[0].key == "a"
           success.get.res.get.results[0].val.kind == ValueKind.Tuple
-          success.get.res.get.results[0].val.`tuple`.len == 0
-        success = parse(parser, "^done,key={key=\"val\"}\n(gdb)\n")
-        check:
-          success.isSome
-          success.get.res.isSome
-          success.get.res.get.results.len == 1
-          success.get.res.get.results[0].key == "key"
-          success.get.res.get.results[0].val.kind == ValueKind.Tuple
-          # success.get.res.get.results[0].val.`tuple`.len == 0
+          success.get.res.get.results[0].val.`tuple`.len == 1
+          success.get.res.get.results[0].val.`tuple`["b"].`tuple`.len == 1
+          success.get.res.get.results[0].val.`tuple`["b"].`tuple`["c"].`const` == "d"
     # suite "e2e":
     #   setup:
     #     let tmp = createTempDir("debug_gdb", "test_e2e")
