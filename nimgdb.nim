@@ -21,66 +21,8 @@ import pkg/cligen
 import pkg/platforms
 import pkg/procs
 
-#****if* nimgdb/lineInfo
-proc lineInfo(info: tuple[filename: string, line: int, column: int]): string =
-  ## PURPOSE
-  ##   Return formatted lineinfo as a string.
-  ## DESCRIPTION
-  ##   Used for logging.
-  ##   Formatted with a leading relative directory so link is clickable in VSCode.
-  format($CurDir/"$1($2, $3)", info.filename, info.line, info.column)
-#******
-
-#****if* nimgdb/traceMsg
-template traceMsg(msg: string) =
-  ## PURPOSE
-  ##   Write formatted trace `msg` to `stderr`.
-  when defined trace:
-    {.cast(noSideEffect).}:
-      stderr.writeLine format("$1 $2", lineInfo(instantiationInfo()), msg)
-#******
-
-#****if* nimgdb/trace(sym, msg)
-macro trace(sym: typed, msg: untyped = nil) =
-  ## PURPOSE
-  ##   Write formatted trace `msg` to `stderr`.
-  echo repr sym.getTypeImpl
-  when defined trace:
-    let id: string = repr sym
-    {.cast(noSideEffect).}:
-      if msg == nil:
-        quote do:
-          stderr.writeLine format("$1 trace($2) = $3",
-            lineInfo(instantiationInfo()), `id`, `sym`)
-      else:
-        quote do:
-          stderr.writeLine format("$1 trace($2) = $3 \"$4\"",
-            lineInfo(instantiationInfo()), `id`, `sym`, `msg`)
-#******
-
-#****if* nimgdb/debug
-template debug(msg: string) =
-  ## PURPOSE
-  ##   Write formatted debug `msg` to `stderr`.
-  when defined debug:
-    {.cast(noSideEffect).}:
-      stderr.writeLine format("$1 debug: $2", lineInfo(instantiationInfo()), msg)
-#******
-
-#****if* nimgdb/info
-template info(msg: string) =
-  ## PURPOSE
-  ##   Write formatted info `msg` to `stderr`.
-  stderr.writeLine "info: " & msg
-#******
-
-#****if* nimgdb/fatal
-template fatal(msg: string) =
-  ## PURPOSE
-  ##   Write formatted fatal `msg` to `stderr` and quit with error return code.
-  stderr.writeLine "error: " & msg
-  quit 1
-#******
+import "."/debug_logging
+import debug as dbg
 
 # template runtimeAssert*(expr; msg = "") =
 #   ## Runtime asserts.
@@ -339,22 +281,33 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
     tupleDepth: int
     tupleVal: Tuple
     value: Value
-    resultPair: Result
+    resultPairs: seq[Result]
     results: seq[Result]
     token: Token
     resRec: ResultRec
     o: Output
     r: Option[Output]
+  proc resultPair: var Result =
+    if resultPairs.len > 0:
+      return resultPairs[^1]
+    elif resultPairs.len == 0:
+      resultPairs.add Result()
+      return resultPairs[0]
   let miParser = parser.peg.eventParser:
     pkNonTerminal:
       enter:
-        if p.nt.name == "tuple":
-          tupleDepth.inc
-          debug "tupleDepth start " & $tupleDepth
+        when defined debug:
+          debug "maybe " & p.nt.name
+          case p.nt.name
+          of "tuple":
+            tupleDepth.inc
+            debug "tupleDepth start " & $tupleDepth
+          of "result":
+            debug "result start"
       leave:
         if length > 0:
           match = s.substr(start, start+length-1)
-          trace p.nt.name
+          debug p.nt.name
           case p.nt.name
           of "token":
             token = match.Token
@@ -364,22 +317,30 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
             debug "tupleDepth finish " & $tupleDepth
             debug $results.len
             debug $results
-            tupleDepth.dec
-            if tupleDepth == 0:
+            if tupleDepth > 0:
+              tupleDepth.dec
               value.kind = ValueKind.Tuple
               value.`tuple` = tupleVal
+              tupleVal.clear
+              debug "tupleVal clear"
           of "list":
             debug "list"
             # value.`list` = listVal
           of "variable":
-            resultPair.key = match
+            resultPair().key = match
           of "value":
-            resultPair.val = value
+            debug $tupleDepth
+            resultPair().val = value
+            value.reset
+            debug "value reset"
           of "result":
+            debug $tupleDepth
             if tupleDepth > 0:
-              tupleVal[resultPair.key] = resultPair.val
+              tupleVal[resultPair().key] = resultPair().val
             else:
-              results.add resultPair
+              results.add resultPair()
+            # resultPair.reset
+            debug "resultPair reset"
           of "result_class":
             case match
             of $ResultKind.Done:
@@ -399,12 +360,15 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
           of "result_record":
             resRec.results = results
             o.res = some resRec
-            resRec = ResultRec()
+            resRec.reset
+            debug "resRec reset"
           of "output":
             r = some o
         else:
-          if p.nt.name == "tuple":
-            tupleDepth.dec
+          when defined debug:
+            debug "not " & p.nt.name
+            if p.nt.name == "tuple":
+              tupleDepth.dec
 
   let parsedLen = miParser(resp) # TODO: do something with this result
   debug $r
@@ -545,6 +509,7 @@ proc nimgdb*(args: seq[string],
   ## SEE ALSO
   ##   `preRunOrAttachCmds`
   ##   `newDefaultGdbOptions`
+  initLogging()
   var i = GdbInstance()
   i.initGdbSync
   gdbInstances.add i
@@ -564,6 +529,7 @@ proc nimgdb*(args: seq[string],
 
 when isMainModule:
   when defined test:
+    initLogging()
     import std/[tempfiles, unittest]
     # import fusion/scripting
     template checkParsed(i) = check parse(parser, i).isSome
