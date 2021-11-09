@@ -179,7 +179,7 @@ type
     ##   Enum that represents the error kind.
     ## ATTRIBUTION
     ##   Copyright (C) 1988-2021 Free Software Foundation, Inc.
-    ##   Comments are verbatim copies.
+    ##   Some comments are verbatim copies.
     ##   Subject to GNU Free Documentation License, Version 1.3 or any later version
     ##   Derived/copied from:
     ##     https://sourceware.org/gdb/current/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records
@@ -292,12 +292,6 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
     resRec: ResultRec
     o: Output
     r: Option[Output]
-  proc resultPair: var Result =
-    if resultPairs.len > 0:
-      return resultPairs[^1]
-    elif resultPairs.len == 0:
-      resultPairs.add Result()
-      return resultPairs[0]
   let miParser = parser.peg.eventParser:
     pkNonTerminal:
       enter:
