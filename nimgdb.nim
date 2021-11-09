@@ -711,17 +711,22 @@ when isMainModule:
           success.get.res.get.results[0].val.kind == ValueKind.ValueList
           success.get.res.get.results[0].val.values.len == 1
           success.get.res.get.results[0].val.values[0].`const` == "val"
-        success = parse(parser, "^done,a=[\"b\",[\"c\"]]\n(gdb)\n")
+        success = parse(parser, "^done,a=[\"b\",[\"c\"],{},{d=\"e\"}]\n(gdb)\n")
         check:
           success.isSome
           success.get.res.isSome
           success.get.res.get.results.len == 1
           success.get.res.get.results[0].key == "a"
           success.get.res.get.results[0].val.kind == ValueKind.ValueList
-          success.get.res.get.results[0].val.values.len == 2
+          success.get.res.get.results[0].val.values.len == 4
           success.get.res.get.results[0].val.values[0].`const` == "b"
           success.get.res.get.results[0].val.values[1].kind == ValueKind.ValueList
           success.get.res.get.results[0].val.values[1].values[0].`const` == "c"
+          success.get.res.get.results[0].val.values[2].kind == ValueKind.Tuple
+          success.get.res.get.results[0].val.values[2].`tuple`.len == 0
+          success.get.res.get.results[0].val.values[3].kind == ValueKind.Tuple
+          success.get.res.get.results[0].val.values[3].`tuple`.len == 1
+          success.get.res.get.results[0].val.values[3].`tuple`["d"].`const` == "e"
     # suite "e2e":
     #   setup:
     #     let tmp = createTempDir("debug_gdb", "test_e2e")
