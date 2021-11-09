@@ -62,7 +62,7 @@ proc initLogging*() =
 # #******
 
 #****f* logging/debug
-template debug*(msg: string, tags: HashSet[string] = ["*"].toHashSet) =
+template debug*(msg: string, tags: HashSet[string] | seq[string] = @["*"]) =
   ## PURPOSE
   ##   Write formatted debug `msg` to `stderr`.
   when tags.inDebugTag:
