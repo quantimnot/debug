@@ -10,6 +10,7 @@
 #*   - [ ] connect translator to stdout
 #*   - [ ] add test for entitled gdb on macos
 #*   - [ ] add proc to entitle gdb on macos
+#*   - [ ] maybe rename `result` to `kv` or `pair`?
 #******
 
 import std/[
@@ -214,15 +215,31 @@ type
     Const
     List
     Tuple
+  ListValueKind* {.pure.} = enum
+    Const
+    List
+    Tuple
+    Result
   Tuple* = Table[string, Value]
+  List* = seq[Value]
   Value* = object
     case kind*: ValueKind
-    of Const:
+    of ValueKind.Const:
       `const`*: string
-    of List:
+    of ValueKind.List:
       list*: seq[Value]
     of ValueKind.Tuple:
       `tuple`*: Tuple
+  # ListValue* = object
+  #   case kind*: ListValueKind
+  #   of ListValueKind.Const:
+  #     `const`*: string
+  #   of ListValueKind.List:
+  #     list*: seq[Value]
+  #   of ListValueKind.Tuple:
+  #     `tuple`*: Tuple
+  #   of ListValueKind.Result:
+  #     `result`*: Result
   Result* = object
     key*: string
     val*: Value
@@ -262,6 +279,7 @@ type
 
 proc `=copy`(a: var GdbObj, b: GdbObj) {.error.}
 
+# proc `==`*(a,b: ListValue): bool = compareVariant(a,b)
 proc `==`*(a,b: Value): bool = compareVariant(a,b)
 
 var
@@ -284,6 +302,8 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
   var
     match: string
     tupleDepth: int
+    listDepth: int
+    listVal: List
     tupleVal: Tuple
     value: Value
     resultPairs: seq[Result]
@@ -300,6 +320,9 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
         of "tuple":
           tupleDepth.inc
           debug "tupleDepth start " & $tupleDepth
+        of "list":
+          listDepth.inc
+          debug "listDepth start " & $listDepth
         of "result":
           debug "result start"
       leave:
@@ -322,7 +345,13 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
               tupleVal.clear
               debug "tupleVal clear"
           of "list":
-            debug "list"
+            debug "listDepth finish " & $listDepth
+            if listDepth > 0:
+              listDepth.dec
+              value.kind = ValueKind.List
+              value.`list` = listVal
+              # listVal.clear
+              debug "listVal clear"
             # value.`list` = listVal
           of "variable":
             resultPairs.add Result(key: match)
@@ -622,6 +651,34 @@ when isMainModule:
           success.get.res.get.results[0].val.`tuple`["b"].`tuple`.len == 1
           success.get.res.get.results[0].val.`tuple`["b"].`tuple`["c"].`const` == "d"
           success.get.res.get.results[0].val.`tuple`["e"].`const` == "f"
+      test "list values":
+        var success = parse(parser, "^done,key=[]\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.results.len == 1
+          success.get.res.get.results[0].key == "key"
+          success.get.res.get.results[0].val.kind == ValueKind.List
+          success.get.res.get.results[0].val.`list`.len == 0
+        success = parse(parser, "^done,key=[\"val\"]\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.results.len == 1
+          success.get.res.get.results[0].key == "key"
+          success.get.res.get.results[0].val.kind == ValueKind.List
+          success.get.res.get.results[0].val.`list`.len == 1
+          success.get.res.get.results[0].val.`list`[0].`const` == "val"
+        success = parse(parser, "^done,a=[\"b\",[\"c\"]]\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.results.len == 1
+          success.get.res.get.results[0].key == "a"
+          success.get.res.get.results[0].val.kind == ValueKind.List
+          success.get.res.get.results[0].val.`list`.len == 2
+          success.get.res.get.results[0].val.`list`[0].`const` == "b"
+          success.get.res.get.results[0].val.`list`[1].`list`[0].`const` == "c"
     # suite "e2e":
     #   setup:
     #     let tmp = createTempDir("debug_gdb", "test_e2e")
