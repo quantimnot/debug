@@ -213,33 +213,30 @@ type
     Stopped
   ValueKind* {.pure.} = enum
     Const
-    List
+    ValueList
+    ResultList
     Tuple
-  ListValueKind* {.pure.} = enum
-    Const
-    List
-    Tuple
-    Result
+  # ListKind* {.pure.} = enum
+  #   Value
+  #   Result
   Tuple* = Table[string, Value]
+  # ListValue* = object
+  #   case kind*: ListValueKind
+  #   of ListValueKind.Value:
+  #     values*: seq[Value]
+  #   of ListValueKind.Result:
+  #     results*: seq[Result]
   List* = seq[Value]
   Value* = object
     case kind*: ValueKind
     of ValueKind.Const:
       `const`*: string
-    of ValueKind.List:
-      list*: seq[Value]
+    of ValueKind.ValueList:
+      values*: List
+    of ValueKind.ResultList:
+      results*: List
     of ValueKind.Tuple:
       `tuple`*: Tuple
-  # ListValue* = object
-  #   case kind*: ListValueKind
-  #   of ListValueKind.Const:
-  #     `const`*: string
-  #   of ListValueKind.List:
-  #     list*: seq[Value]
-  #   of ListValueKind.Tuple:
-  #     `tuple`*: Tuple
-  #   of ListValueKind.Result:
-  #     `result`*: Result
   Result* = object
     key*: string
     val*: Value
@@ -300,10 +297,12 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
   template debug(msg) =
     debug_logging.debug(msg, tags = @["nimgdb_parse"])
   var
+    possible: seq[string]
     match: string
     tupleDepth: int
     listDepth: int
     listVal: List
+    valLists: seq[seq[Value]]
     tupleVal: Tuple
     value: Value
     resultPairs: seq[Result]
@@ -318,13 +317,23 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
         debug "? " & p.nt.name
         case p.nt.name
         of "tuple":
+          possible.add "tuple"
           tupleDepth.inc
-          debug "tupleDepth start " & $tupleDepth
+          # debug "tupleDepth start " & $tupleDepth
+        of "value_list":
+          valLists.add @[]
+          possible.add "value_list"
+          listDepth.inc
+          # debug "listDepth start " & $listDepth
+        of "empty_list":
+          possible.add p.nt.name
+        of "result_list":
+          possible.add p.nt.name
         of "list":
           listDepth.inc
-          debug "listDepth start " & $listDepth
+          # possible.add "list"
         of "result":
-          debug "result start"
+          possible.add "result"
       leave:
         if length > 0:
           match = s.substr(start, start+length-1)
@@ -335,7 +344,8 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
           of "const":
             value.`const` = match.strip(chars = {'"'})
           of "tuple":
-            debug "tupleDepth finish " & $tupleDepth
+            possible.delete(possible.len-1)
+            # debug "tupleDepth finish " & $tupleDepth
             debug $results.len
             debug $results
             if tupleDepth > 0:
@@ -345,23 +355,48 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
               tupleVal.clear
               debug "tupleVal clear"
           of "list":
+            # possible.delete(possible.len-1)
+            debug $possible
+            # NOTE
+            #   A list is either empty, contains only values, or contains only results (pairs).
             debug "listDepth finish " & $listDepth
+            # if listDepth > 0:
+            #   listDepth.dec
+            #   value.kind = ValueKind.List
+            #   value.`list` = listVal
+            #   # listVal.clear
+            #   debug "listVal clear"
+            # value.`list` = listVal
+          of "value_list":
+            possible.delete(possible.len-1)
             if listDepth > 0:
               listDepth.dec
-              value.kind = ValueKind.List
-              value.`list` = listVal
+              value.kind = ValueKind.ValueList
+              value.values = valLists.pop
               # listVal.clear
               debug "listVal clear"
             # value.`list` = listVal
           of "variable":
             resultPairs.add Result(key: match)
+            debug $possible
             debug $resultPairs
           of "value":
-            resultPairs[^1].val = value
-            debug $resultPairs
+            debug $possible
+            case possible[^1]
+            of "value_list":
+              valLists[^1].add value
+              echo $valLists
+            of "empty_list":
+              resultPairs[^1].val.kind = ValueKind.ValueList
+              resultPairs[^1].val.values = @[]
+              echo $resultPairs
+            else:
+              resultPairs[^1].val = value
+              debug $resultPairs
             value.reset
             debug "value reset"
           of "result":
+            possible.delete(possible.len-1)
             debug $tupleDepth
             let v = resultPairs.pop
             if tupleDepth > 0:
@@ -395,8 +430,15 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
             r = some o
         else:
           debug "! " & p.nt.name
-          if p.nt.name == "tuple":
+          case p.nt.name
+          of "tuple":
             tupleDepth.dec
+            possible.delete(possible.len-1)
+          of "list":
+            listDepth.dec
+            # possible.delete(possible.len-1)
+          of "value_list", "result_list", "empty_list":
+            possible.delete(possible.len-1)
 
   let parsedLen = miParser(resp) # TODO: do something with this result
   debug $r
@@ -658,27 +700,28 @@ when isMainModule:
           success.get.res.isSome
           success.get.res.get.results.len == 1
           success.get.res.get.results[0].key == "key"
-          success.get.res.get.results[0].val.kind == ValueKind.List
-          success.get.res.get.results[0].val.`list`.len == 0
+          success.get.res.get.results[0].val.kind == ValueKind.ValueList
+          success.get.res.get.results[0].val.values.len == 0
         success = parse(parser, "^done,key=[\"val\"]\n(gdb)\n")
         check:
           success.isSome
           success.get.res.isSome
           success.get.res.get.results.len == 1
           success.get.res.get.results[0].key == "key"
-          success.get.res.get.results[0].val.kind == ValueKind.List
-          success.get.res.get.results[0].val.`list`.len == 1
-          success.get.res.get.results[0].val.`list`[0].`const` == "val"
+          success.get.res.get.results[0].val.kind == ValueKind.ValueList
+          success.get.res.get.results[0].val.values.len == 1
+          success.get.res.get.results[0].val.values[0].`const` == "val"
         success = parse(parser, "^done,a=[\"b\",[\"c\"]]\n(gdb)\n")
         check:
           success.isSome
           success.get.res.isSome
           success.get.res.get.results.len == 1
           success.get.res.get.results[0].key == "a"
-          success.get.res.get.results[0].val.kind == ValueKind.List
-          success.get.res.get.results[0].val.`list`.len == 2
-          success.get.res.get.results[0].val.`list`[0].`const` == "b"
-          success.get.res.get.results[0].val.`list`[1].`list`[0].`const` == "c"
+          success.get.res.get.results[0].val.kind == ValueKind.ValueList
+          success.get.res.get.results[0].val.values.len == 2
+          success.get.res.get.results[0].val.values[0].`const` == "b"
+          success.get.res.get.results[0].val.values[1].kind == ValueKind.ValueList
+          success.get.res.get.results[0].val.values[1].values[0].`const` == "c"
     # suite "e2e":
     #   setup:
     #     let tmp = createTempDir("debug_gdb", "test_e2e")

@@ -14,7 +14,10 @@ variable <- string
 value <- const / tuple / list
 const <- '"' c_string '"'
 tuple <- "{}" / "{" result ( "," result )* "}"
-list <- "[]" / "[" value ( "," value )* "]" / "[" result ( "," result )* "]"
+list <- empty_list / value_list / result_list
+empty_list <- "[]"
+value_list <- "[" value ( "," value )* "]"
+result_list <- "[" result ( "," result )* "]"
 stream_record <- console_stream_output / target_stream_output / log_stream_output
 console_stream_output <- "~" c_string \n
 target_stream_output <- "@" c_string \n
