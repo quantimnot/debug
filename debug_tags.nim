@@ -1,17 +1,17 @@
-#****h* debug/debug
+#****h* debug/tags
 ## TODO
 ##   - [ ]
 #******
 import std/[sets, strutils]
 export sets
 
-#****ic* debug/debug
+#****ic* tags/debug
 const debug {.strdefine.}: string = ""
 ## PURPOSE
 ##   Holds the debug tags that enable debug code.
 #******
 
-#****c* debug/debugTags
+#****c* tags/debugTags
 ## PURPOSE
 ##   Holds the debug tags that enable debug code.
 ## DESCRIPTION
@@ -26,7 +26,7 @@ const debugTags* = (
 )()
 #******
 
-#****f* debug/inDebugTags
+#****f* tags/inDebugTags
 ## PURPOSE
 ##   Tests whether any tag in a set is contained in the set of debug tags.
 proc inDebugTags*(tags: HashSet[string] | seq[string]): bool =
