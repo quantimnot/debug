@@ -579,13 +579,13 @@ when isMainModule:
           success.get.res.get.results[0].val.values[3].kind == ValueKind.Tuple
           success.get.res.get.results[0].val.values[3].`tuple`.len == 1
           success.get.res.get.results[0].val.values[3].`tuple`["d"].`const` == "e"
-        success = parse(parser, "^done,a=[b=\"c\"]\n(gdb)\n")
+        success = parse(parser, "^done,a=[b=\"c\",d=\"e\"]\n(gdb)\n")
         check:
           success.isSome
           success.get.res.isSome
           success.get.res.get.results.len == 1
           success.get.res.get.results[0].key == "a"
           success.get.res.get.results[0].val.kind == ValueKind.ResultList
-          success.get.res.get.results[0].val.results.len == 1
+          success.get.res.get.results[0].val.results.len == 2
           success.get.res.get.results[0].val.results[0].key == "b"
           success.get.res.get.results[0].val.results[0].val.`const` == "c"
