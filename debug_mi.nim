@@ -4,10 +4,11 @@
 ## SEE ALSO
 #*   - [docgen]( href:debug_mi.html )
 #* TODO
-#*   - [ ] parse lists
+#*   - [X] parse lists
 #*   - [ ] create a symbol translator with test (translator acts on streams)
 #*   - [ ] maybe rename `result` to `kv`, `pair` or `variable`?
 #*   - [ ] rewrite the comments from the GDB manual to avoid licensing issues
+#*   - [ ] maybe parse into a JsonNode?
 #******
 import
   std/[sequtils, strutils, tables, streams, pegs, options, macros],
