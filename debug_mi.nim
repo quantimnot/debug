@@ -197,7 +197,7 @@ type
     of ValueKind.ValueList:
       values*: List
     of ValueKind.ResultList:
-      results*: List
+      results*: seq[Result]
     of ValueKind.Tuple:
       `tuple`*: Tuple
   Result* = object
@@ -240,6 +240,10 @@ proc newGdbMiParser*(): owned GdbMiParser {.raises: [ValueError, Exception].} =
 proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
   ## PURPOSE
   ##   Parse GDB's output
+  ## DESIGN NOTES
+  ##   I need to clarify my thoughts on an algorithm to parse list and tuple
+  ##   values. I'm currently writing tests and then throwing code at it until
+  ##   it passes.
   template debug(msg) =
     debug_logging.debug(msg, tags = @[moduleName() & "_parse"])
   var
@@ -326,6 +330,15 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
               # listVal.clear
               debug "listVal clear"
             # value.`list` = listVal
+          of "result_list":
+            possible.delete(possible.len-1)
+            if listDepth > 0:
+              listDepth.dec
+              value.kind = ValueKind.ResultList
+              value.results = resLists.pop
+              # listVal.clear
+              debug "listVal clear"
+            # value.`list` = listVal
           of "variable":
             resultPairs.add Result(key: match)
             debug $possible
@@ -334,16 +347,19 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
             debug $possible
             case possible[^1]
             of "value_list":
+              debug "list value"
               valLists[^1].add value
-              echo $valLists
+              debug $valLists
             of "result_list":
+              debug "list result"
               resLists[^1].add res
-              echo $resLists
+              debug $resLists
             of "empty_list":
               resultPairs[^1].val.kind = ValueKind.ValueList
               resultPairs[^1].val.values = @[]
-              echo $resultPairs
+              debug $resultPairs
             else:
+              debug "result value"
               resultPairs[^1].val = value
               debug $resultPairs
             value.reset
@@ -351,14 +367,19 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
           of "result":
             debug $possible
             let v = resultPairs.pop
+            if possible.len > 1:
+              possible.delete(possible.len-1)
             case possible[^1]
             of "result_list":
+              debug "list result"
               resLists[^1].add v
+              debug $resLists
+              debug $resultPairs
             of "tuple":
+              debug "tuple result"
               tupleVal[v.key] = v.val
             else:
               results.add v
-            possible.delete(possible.len-1)
             # if tupleDepth > 0:
             #   tupleVal[v.key] = v.val
             # else:
@@ -400,6 +421,7 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
           of "value_list", "result_list", "empty_list":
             possible.delete(possible.len-1)
 
+  debug "\n\nParse:\n" & resp
   let parsedLen = miParser(resp) # TODO: do something with this result
   debug $r
   r
@@ -564,6 +586,6 @@ when isMainModule:
           success.get.res.get.results.len == 1
           success.get.res.get.results[0].key == "a"
           success.get.res.get.results[0].val.kind == ValueKind.ResultList
-          # success.get.res.get.results[0].val.results.len == 1
-          # success.get.res.get.results[0].val.results[0].key == "b"
-          # success.get.res.get.results[0].val.results[0].val.`const` == "c"
+          success.get.res.get.results[0].val.results.len == 1
+          success.get.res.get.results[0].val.results[0].key == "b"
+          success.get.res.get.results[0].val.results[0].val.`const` == "c"
