@@ -108,6 +108,7 @@ ignore files:
     todo
     .git
     .history
+    htmldocs
 accept files:
 header markers:
     /****

@@ -5,18 +5,13 @@
 import std/[sets, strutils]
 export sets
 
-#****ic* tags/debug
+#****id* tags/debug const
 const debug {.strdefine.}: string = ""
-## PURPOSE
-##   Holds the debug tags that enable debug code.
+  ## PURPOSE
+  ##   Holds the debug tags that enable debug code.
 #******
 
 #****c* tags/debugTags
-## PURPOSE
-##   Holds the debug tags that enable debug code.
-## DESCRIPTION
-##   The debug tags are set at compilation like `-d:debug=tag0,tag1,...`.
-##   The default tag is 'true', which means everything should be enabled.
 const debugTags* = (
   proc(): HashSet[string] =
     if debug.len == 0 or debug == "true":
@@ -24,14 +19,19 @@ const debugTags* = (
     else:
       return debug.split(',').toHashSet
 )()
+  ## PURPOSE
+  ##   Holds the debug tags that enable debug code.
+  ## DESCRIPTION
+  ##   The debug tags are set at compilation like `-d:debug=tag0,tag1,...`.
+  ##   The default tag is 'true', which means everything should be enabled.
 #******
 
 #****f* tags/inDebugTags
-## PURPOSE
-##   Tests whether any tag in a set is contained in the set of debug tags.
-proc inDebugTags*(tags: HashSet[string] | seq[string]): bool =
-  when tags is seq[string]:
-    not disjoint(tags.toHashSet, debugTags)
-  elif tags is HashSet[string]:
-    not disjoint(tags, debugTags)
+proc inDebugTags*(tags: seq[string]): bool =
+  ## PURPOSE
+  ##   Tests whether any tag in a set is contained in the set of debug tags.
+  # when tags is seq[string]:
+  not disjoint(tags.toHashSet, debugTags)
+  # elif tags is HashSet[string]:
+  #   not disjoint(tags, debugTags)
 #******

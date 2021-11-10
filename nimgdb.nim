@@ -4,13 +4,14 @@
 ## SEE ALSO
 #*   - [docgen]( href:nimgdb.html )
 #* TODO
-#*   - [X] connect `nimgdb`'s `stdin` to `gdb`'s `stdin`
+#*   - [ ] parse lists
 #*   - [ ] create a symbol translator with test (translator acts on streams)
 #*   - [ ] connect gdb stdout to translator
 #*   - [ ] connect translator to stdout
 #*   - [ ] add test for entitled gdb on macos
 #*   - [ ] add proc to entitle gdb on macos
 #*   - [ ] maybe rename `result` to `kv` or `pair`?
+#*   - [X] connect `nimgdb`'s `stdin` to `gdb`'s `stdin`
 #******
 
 import std/[
@@ -22,8 +23,11 @@ import pkg/cligen
 import pkg/platforms
 import pkg/procs
 
-from "."/debug_logging import initLogging, fatal
-import debug as dbg
+# TODO
+#   [ ] why is this `sets` import needed when it's already imported and reexported debug_logging?
+#       I think this worked earlier when `debug_tags` was `debug`.
+import debug_tags
+from debug_logging import initLogging, fatal
 
 template debug(msg) =
   debug_logging.debug(msg, tags = @["nimgdb"])
@@ -45,10 +49,6 @@ template debug(msg) =
 
 const
   gdbMiPeg = staticRead "gdb_mi.peg"
-  gdbNimPy = staticRead "formatters/nim-gdb.py"
-  debuggerPy = staticRead "gdb.py"
-  gdbinit = staticRead "gdbinit"
-  sleepMsDur {.intdefine.} = 500
 
 type
   GdbMiParser* = object
