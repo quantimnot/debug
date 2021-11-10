@@ -1,19 +1,18 @@
 #****h* debug/logging
-#* TODO
-#*   - [ ] why is `sets` export needed for nimgdb to compile when it's already exported by debug_tags?
-#*         I think this worked earlier when `debug_tags` was `debug`.
+## PURPOSE
+##   Provides debug logging.
 #******
 import std/[macros, sets, logging, strutils, os]
 
 import debug_tags
 export debug_tags
 
-export sets
-
 export
   logging.log, logging.info, logging.notice, logging.warn, logging.error
 
 var consoleLog {.threadvar.}: Logger
+
+template moduleName*: string = instantiationInfo().filename.splitFile.name
 
 #****if* logging/lineInfo
 proc lineInfo(info: tuple[filename: string, line: int, column: int]): string =
@@ -39,7 +38,7 @@ proc initLogging*() =
 #******
 
 #****f* logging/debug(string,seq[string])
-template debug*(msg: string, tags = @["*"]) =
+template debug*(msg: string, tags = @[moduleName]) =
   ## PURPOSE
   ##   Write formatted debug `msg` to `stderr`.
   when debug_tags.inDebugTags(tags):

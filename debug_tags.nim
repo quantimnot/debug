@@ -3,7 +3,6 @@
 ##   - [ ]
 #******
 import std/[sets, strutils]
-export sets
 
 #****id* tags/debug const
 const debug {.strdefine.}: string = ""
