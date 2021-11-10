@@ -12,7 +12,8 @@ export
 
 var consoleLog {.threadvar.}: Logger
 
-template moduleName*: string = instantiationInfo().filename.splitFile.name
+template moduleName*: string =
+  os.splitFile(instantiationInfo().filename).name
 
 #****if* logging/lineInfo
 proc lineInfo(info: tuple[filename: string, line: int, column: int]): string =
@@ -38,7 +39,7 @@ proc initLogging*() =
 #******
 
 #****f* logging/debug(string,seq[string])
-template debug*(msg: string, tags = @[moduleName]) =
+template debug*(msg: string, tags = @[moduleName()]) =
   ## PURPOSE
   ##   Write formatted debug `msg` to `stderr`.
   when debug_tags.inDebugTags(tags):

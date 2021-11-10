@@ -12,8 +12,12 @@
 import
   std/[sequtils, strutils, tables, streams, pegs, options, macros],
   pkg/[platforms, procs],
-  pkg/prelude/[alias, compare_variant],
-  "."/[debug_logging]
+  pkg/prelude/[alias, compare_variant]
+
+import debug_logging except debug
+
+template debug(msg) =
+  debug_logging.debug(msg, tags = @[moduleName()])
 
 const
   gdbMiPeg = staticRead "gdb_mi.peg"
