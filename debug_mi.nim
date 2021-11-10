@@ -6,7 +6,7 @@
 #* TODO
 #*   - [ ] parse lists
 #*   - [ ] create a symbol translator with test (translator acts on streams)
-#*   - [ ] maybe rename `result` to `kv` or `pair`?
+#*   - [ ] maybe rename `result` to `kv`, `pair` or `variable`?
 #*   - [ ] rewrite the comments from the GDB manual to avoid licensing issues
 #******
 import

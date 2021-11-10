@@ -1,7 +1,7 @@
 #****h* debug/debug
 ## PURPOSE
 ##   Set of debugging utilities.
-## DESCRIPTION
+## FEATURES
 ##   - [ ] MI parser
 ##   - [ ] MI translation/filtering
 ##   - [ ] GDB controller
@@ -19,4 +19,6 @@ import
   debug_tags,
   debug_logging,
   debug_markers,
+  debug_mi,
+  debug_dap,
   nimgdb
