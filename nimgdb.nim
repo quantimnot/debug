@@ -303,8 +303,10 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
     listDepth: int
     listVal: List
     valLists: seq[seq[Value]]
+    resLists: seq[seq[Result]]
     tupleVal: Tuple
     value: Value
+    res: Result
     resultPairs: seq[Result]
     results: seq[Result]
     token: Token
@@ -317,23 +319,25 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
         debug "? " & p.nt.name
         case p.nt.name
         of "tuple":
-          possible.add "tuple"
+          possible.add p.nt.name
           tupleDepth.inc
           # debug "tupleDepth start " & $tupleDepth
         of "value_list":
           valLists.add @[]
-          possible.add "value_list"
+          possible.add p.nt.name
           listDepth.inc
           # debug "listDepth start " & $listDepth
         of "empty_list":
           possible.add p.nt.name
         of "result_list":
+          resLists.add @[]
           possible.add p.nt.name
+          listDepth.inc
         of "list":
           listDepth.inc
           # possible.add "list"
         of "result":
-          possible.add "result"
+          possible.add p.nt.name
       leave:
         if length > 0:
           match = s.substr(start, start+length-1)
@@ -386,6 +390,9 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
             of "value_list":
               valLists[^1].add value
               echo $valLists
+            of "result_list":
+              resLists[^1].add res
+              echo $resLists
             of "empty_list":
               resultPairs[^1].val.kind = ValueKind.ValueList
               resultPairs[^1].val.values = @[]
@@ -396,13 +403,20 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
             value.reset
             debug "value reset"
           of "result":
-            possible.delete(possible.len-1)
-            debug $tupleDepth
+            debug $possible
             let v = resultPairs.pop
-            if tupleDepth > 0:
+            case possible[^1]
+            of "result_list":
+              resLists[^1].add v
+            of "tuple":
               tupleVal[v.key] = v.val
             else:
               results.add v
+            possible.delete(possible.len-1)
+            # if tupleDepth > 0:
+            #   tupleVal[v.key] = v.val
+            # else:
+            #   results.add v
             # resultPair.reset
             # debug "resultPair reset"
           of "result_class":
@@ -727,6 +741,16 @@ when isMainModule:
           success.get.res.get.results[0].val.values[3].kind == ValueKind.Tuple
           success.get.res.get.results[0].val.values[3].`tuple`.len == 1
           success.get.res.get.results[0].val.values[3].`tuple`["d"].`const` == "e"
+        success = parse(parser, "^done,a=[b=\"c\"]\n(gdb)\n")
+        check:
+          success.isSome
+          success.get.res.isSome
+          success.get.res.get.results.len == 1
+          success.get.res.get.results[0].key == "a"
+          success.get.res.get.results[0].val.kind == ValueKind.ResultList
+          # success.get.res.get.results[0].val.results.len == 1
+          # success.get.res.get.results[0].val.results[0].key == "b"
+          # success.get.res.get.results[0].val.results[0].val.`const` == "c"
     # suite "e2e":
     #   setup:
     #     let tmp = createTempDir("debug_gdb", "test_e2e")
