@@ -4,11 +4,12 @@
 ## SEE ALSO
 #*   - [docgen]( href:debug_mi.html )
 #* TODO
-#*   - [X] parse lists
 #*   - [ ] create a symbol translator with test (translator acts on streams)
 #*   - [ ] maybe rename `result` to `kv`, `pair` or `variable`?
 #*   - [ ] rewrite the comments from the GDB manual to avoid licensing issues
 #*   - [ ] maybe parse into a JsonNode?
+#*   - [X] parse lists
+#*   - [X] parse tuples
 #******
 import
   std/[sequtils, strutils, tables, streams, pegs, options, macros],
@@ -88,14 +89,9 @@ type
     ## The inferior called exec. This is reported when catch exec
     ## (see Set Catchpoints) has been used.
   #******
+
   #****t* mi/AsyncRecKind
   AsyncRecKind* {.pure.} = enum
-    ## ATTRIBUTION
-    ##   Copyright (C) 1988-2021 Free Software Foundation, Inc.
-    ##   Comments are verbatim copies.
-    ##   Subject to GNU Free Documentation License, Version 1.3 or any later version
-    ##   Derived/copied from:
-    ##     https://sourceware.org/gdb/current/onlinedocs/gdb/GDB_002fMI-Result-Records.html#GDB_002fMI-Result-Records
     #* SEE ALSO
     #*   href:debug_mi.html#AsyncRecKind
     #* ENUM VALUES
@@ -103,6 +99,7 @@ type
     Status
     Notify
   #******
+
   #****t* mi/ResultKind
   ResultKind* {.pure.} = enum
     ## PURPOSE
@@ -138,6 +135,7 @@ type
     Exit = "exit"
     ## GDB has terminated.
   #******
+
   #****t* mi/ErrorCode
   ErrorCode* {.pure.} = enum
     ## PURPOSE
@@ -156,6 +154,7 @@ type
     UndefinedCommand = "undefined-command"
     ## Indicates that the command causing the error does not exist.
   #******
+
   #****t* mi/Error
   Error* = object
     ## PURPOSE
@@ -169,6 +168,7 @@ type
     code*: ErrorCode
     ## The error code. Defaults to `Unknown`. See `ErrorCode`_.
   #******
+
   StreamRecKind* {.pure.} = enum
     Console
     Target
@@ -245,6 +245,8 @@ proc parse*(parser: GdbMiParser, resp: string): Option[Output] =
   ##   I need to clarify my thoughts on an algorithm to parse list and tuple
   ##   values. I'm currently writing tests and then throwing code at it until
   ##   it passes.
+  ## TODO
+  ##   - [ ] cleanup
   template debug(msg) =
     debug_logging.debug(msg, tags = @[moduleName() & "_parse"])
   var

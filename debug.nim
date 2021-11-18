@@ -2,18 +2,19 @@
 ## PURPOSE
 ##   Set of debugging utilities.
 ## FEATURES
-##   - [ ] MI parser
 ##   - [ ] MI translation/filtering
 ##   - [ ] GDB controller
-##   - [X] logging
+##   - [ ] LLDB controller
+##   - [ ] windbg controller
 ##   - [ ] software defined markers
 ##     - [ ] breakpoints
 ##     - [ ] tracepoints
 ##     - [ ] watchpoints
-##   - [X] debug logging markers/logging are scoped by tags
+##     - [ ] logpoints
 ##   - [ ] DAP server
-##   - [ ] LLDB controller
-##   - [ ] windbg controller
+##   - [X] MI parser, *first working* version
+##   - [X] debug logging markers/logging are scoped by tags
+##   - [X] logging
 #******
 import
   debug_tags,

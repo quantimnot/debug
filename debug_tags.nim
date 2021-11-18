@@ -6,8 +6,8 @@
 ##   nim r -d:debug=tag,othertag,anothertag
 ##   ```
 ## TODO
-##   - [ ] support tag exclusion: `nim r -d:debug=-tagname
-##   - [ ] support tag re: `nim r -d:debug=/tag.+/
+##   - [ ] support tag exclusion: `nim r -d:debug=-tagname` or maybe `nim r -d:debug=!tagname`
+##   - [ ] support tag re: `nim r -d:debug=/tag.+/`
 #******
 import std/[sets, strutils]
 
